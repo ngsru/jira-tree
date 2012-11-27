@@ -1,5 +1,5 @@
 // JIRA5 Tree Viwer
-// Version 0.1.0 (for JIRA 5.1)
+// Version 0.2.0 (for JIRA 5.1)
 // 11-09-2012
 // Autor: Slava Yurin <YurinVV@ya.ru>
 
@@ -9,7 +9,7 @@
 // @description   Show you project as tree
 // @match		  http://jira.ngs.local/*
 // @match		  http://jira/*
-// @version		  0.1.0
+// @version		  0.2.0
 // @include		  http://jira.ngs.local/*
 // @include		  http://jira/*
 // ==/UserScript==
@@ -63,7 +63,8 @@
 									_disabled: false
 								},
 								metadata: {
-									priority: "<ins style='background-image: url(" + issue.fields.priority.iconUrl + ");'/>"
+									priority: "<img src='" + issue.fields.priority.iconUrl + "' title='" + issue.fields.priority.name + "'/>",
+									'status': "<img src='" + issue.fields['status'].iconUrl + "' title='" + issue.fields['status'].name + "'/>"
 								},
 								children: issue.fields.subtasks.map(function(subissue) {
 									return {
@@ -142,7 +143,8 @@
 					// Поля таблицы
 					columns: [
 						{width: 650, header: 'Задачи'},
-						{width: 20, header: '', value: 'priority', source: 'metadata'}
+						{width: 23, header: '', value: 'priority', source: 'metadata'},
+						{width: 23, header: '', value: 'status', source: 'metadata'}
 					],
 					resizable: true
 				},
