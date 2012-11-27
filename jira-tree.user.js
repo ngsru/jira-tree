@@ -16,8 +16,7 @@
 
 (function() {
 	var fun = function($) {
-		window.jQuery.getScript("https://raw.github.com/nevar/jstree/v.pre1.0/jquery.jstree.js", function() {
-		window.jQuery.getScript("https://raw.github.com/deitch/jstree-grid/master/jstreegrid.js", function() {
+		var tree = function() {
 			// Получение списка предыдущих компонент
 			var parent_list = function(node) {
 				var list = [node.attr('id')];
@@ -64,10 +63,7 @@
 									_disabled: false
 								},
 								metadata: {
-									// Надо добавить поля для отображения
-									// (Приоритет, Кому назначено, сколько
-									// времени потрачено ...)
-									test: "$10"
+									priority: "<ins style='background-image: url(" + issue.fields.priority.iconUrl + ");'/>"
 								},
 								children: issue.fields.subtasks.map(function(subissue) {
 									return {
@@ -79,6 +75,9 @@
 											title: subissue.key + ": " + subissue.fields.summary,
 											icon: subissue.fields.issuetype.iconUrl,
 											_disabled: false
+										},
+										metadata: {
+											priority: "<ins style='background-image: url(" + subissue.fields.priority.iconUrl + ");'/>"
 										}
 									};
 								})
@@ -132,41 +131,74 @@
 			};
 
 
-			if ($('div.layout-a').length == 1) {
-				var tree = $('div.layout-a');
 
-				tree.empty();
-				tree.append('<ul></ul>');
-				tree.jstree({
-					plugins: ['themes', 'json_data', 'grid'],
-					grid: {
-						// Поля таблицы
-						columns: [
-							{width: 650, header: 'Задачи'},
-							{width: 60, header: 'Просто тест', value: 'test', source: 'metadata'}
-						],
-						resizable: true
+			var tree = $('div#tree');
+
+			tree.empty();
+			tree.append('<ul></ul>');
+			tree.jstree({
+				plugins: ['themes', 'json_data', 'grid'],
+				grid: {
+					// Поля таблицы
+					columns: [
+						{width: 650, header: 'Задачи'},
+						{width: 20, header: '', value: 'priority', source: 'metadata'}
+					],
+					resizable: true
+				},
+				json_data: {
+					ajax: {
+						type: 'GET',
+						url: get_url,
+						success: parse_data
 					},
-					json_data: {
-						ajax: {
-							type: 'GET',
-							url: get_url,
-							success: parse_data
-						},
-						"correct_state": true
-					},
-					themes: {
-						theme: 'apple',
-						url: 'http://static.jstree.com/v.1.0pre/themes/apple/style.css'
-					},
-					_disabled: true
-				});
-			}
+					"correct_state": true
+				},
+				themes: {
+					theme: 'apple',
+					url: 'http://static.jstree.com/v.1.0pre/themes/apple/style.css'
+				},
+				_disabled: true
+			});
+		};
+
+		// Ищем гадреты для замены
+		var gadget = jQuery('div.gadget-container h3.dashboard-item-title').filter(function() {
+			return (jQuery(this).text() == 'Structure');
 		});
+		var iframe = gadget.parent().parent().find('iframe');
+		var gadgetID = [];
+		iframe.each(function(ID) {
+			gadgetID.push($(this).attr('id'));
+		});
+
+		// Заменяем гаджет на свой
+		gadgetID.forEach(function(ID) {
+			var iframe = jQuery('#' + ID);
+			iframe.attr('src', '//about:blank');
+			iframe.removeAttr('scrolling');
+			iframe.addClass('tree-frame');
+
+			window.frames[ID].document.open('text/html', 'replace');
+			window.frames[ID].document.write(
+				"<html style='height: " + iframe.attr('height') + "px; overflow: auto;'>" +
+					"<head>" +
+						'<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>' +
+						'<script src="https://raw.github.com/nevar/jstree/v.pre1.0/jquery.jstree.js"></script>' +
+						'<script src="https://raw.github.com/deitch/jstree-grid/master/jstreegrid.js"></script>' +
+						'<script>' +
+							"$(" + tree.toString() + ")" +
+						'</script>' +
+					"</head>" +
+					"<body style='height: " + iframe.attr('height') + "px; overflow: auto; margin: 0px;'>" +
+						"<div id='tree'></div>" + // Сюда будет вставлено дерево проекта
+					"</body>" +
+				"</html>");
+			window.frames[ID].document.close();
 		});
 	};
 
-	script = document.createElement("script");
+	var script = document.createElement("script");
 	script.textContent = "(" + fun.toString() + ")(jQuery);";
 	document.body.appendChild(script);
 }());
