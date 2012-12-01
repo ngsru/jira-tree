@@ -9,7 +9,7 @@
 // @description   Show you project as tree
 // @match		  http://jira.ngs.local/*
 // @match		  http://jira/*
-// @version		  0.2.0
+// @version		  0.2.1
 // @include		  http://jira.ngs.local/*
 // @include		  http://jira/*
 // ==/UserScript==
@@ -34,6 +34,9 @@ Ext.require([
 ]);
 
 Ext.onReady(function() {
+	var project_list = [],
+		current_project;
+
     Ext.define('Task', {
         extend: 'Ext.data.Model',
         fields: ['name', 'status']
@@ -85,7 +88,8 @@ Ext.onReady(function() {
             text: 'Задачи',
             flex: 2,
             sortable: true,
-            dataIndex: 'name'
+            dataIndex: 'name',
+			hideable: false
         },{
 			xtype: 'templatecolumn',
             text: 'Состояние',
@@ -160,29 +164,26 @@ Ext.onReady(function() {
 				}
 			});
 		} else {
+			node.set('loading', false);
+			node.expand();
 			node.sort(function(nodeA, nodeB) {
-				if ((nodeA.isLeaf() && nodeB.isLeaf()) ||
-					(!nodeA.isLeaf() && !nodeB.isLeaf())) {
-					if (nodeA.raw.name > nodeB.data.name) {
+				if ((nodeA.raw.componentID && nodeB.raw.componentID) ||
+					(!nodeA.raw.componentID && !nodeB.raw.componentID)){
+					if (nodeA.data.name > nodeB.data.name) {
 						return 1;
-					} if (nodeA.raw.name < nodeB.data.name) {
+					} if (nodeA.data.name < nodeB.data.name) {
 						return -1;
 					}
 					return 0;
+				} else if (nodeA.raw.componentID) {
+					return -1;
 				} else {
-					if (nodeA.isLeaf()) {
-						return 1;
-					} else {
-						return -1;
-					}
+					return 1;
 				}
 			});
 
 			if (node.isRoot()) {
 				tree.setLoading(false);
-			} else {
-				node.set('loading', false);
-				node.expand();
 			}
 		}
 	};
