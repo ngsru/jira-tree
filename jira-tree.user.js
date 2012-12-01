@@ -16,155 +16,7 @@
 
 (function() {
 	var fun = function($) {
-		var tree = function() {
-			// Получение списка предыдущих компонент
-			var parent_list = function(node) {
-				var list = [node.attr('id')];
-				var par = $.jstree._focused()._get_parent(node);
-				while (par != -1) {
-					list.push(par.attr('id'));
-					par = $.jstree._focused()._get_parent(par);
-				}
-
-				return list;
-			}
-			// Определяем окуда надо брать данные
-			var get_url = function(node) {
-				var url = "";
-
-				if (node == -1) {
-					url = "/rest/api/latest/project/MAILSERVER/components"
-				} else {
-					// TODO: несколько компонент
-					var IDs = parent_list(node).join("+and+component+=+");
-					url = "/rest/api/latest/search?jql=component+=+" + IDs;
-				}
-
-				return url;
-			};
-
-			// Обработка полученных данных
-			var parse_data = function(data) {
-				if (data.issues != undefined) {
-					var componentsID = parent_list(this);
-
-					var componentIssues = [];
-					data.issues.forEach(function(issue) {
-						if (issue.fields.components.length == componentsID.length) {
-							var node = {
-								state: "closed",
-								data: {
-									attr: {
-										id: issue.id,
-										href: "/browse/" + issue.key
-									},
-									title: issue.key + ": " + issue.fields.summary,
-									icon: issue.fields.issuetype.iconUrl,
-									_disabled: false
-								},
-								metadata: {
-									priority: "<img src='" + issue.fields.priority.iconUrl + "' title='" + issue.fields.priority.name + "'/>",
-									'status': "<img src='" + issue.fields['status'].iconUrl + "' title='" + issue.fields['status'].name + "'/>"
-								},
-								children: issue.fields.subtasks.map(function(subissue) {
-									return {
-										data: {
-											attr: {
-												id: subissue.id,
-												href: "/browse/" + subissue.key
-											},
-											title: subissue.key + ": " + subissue.fields.summary,
-											icon: subissue.fields.issuetype.iconUrl,
-											_disabled: false
-										},
-										metadata: {
-											priority: "<ins style='background-image: url(" + subissue.fields.priority.iconUrl + ");'/>"
-										}
-									};
-								})
-							};
-							if (issue.fields.subtasks.length == 0) {
-								delete node.state;
-							}
-							componentIssues.push(node);
-						}
-					});
-
-					var componentsInComponent = [];
-					var length = componentsID.length + 1;
-
-					data.issues.forEach(function(issue) {
-						if (issue.fields.components.length == length) {
-							issue.fields.components.forEach(function(component) {
-								if(componentsID.indexOf(component.id) == -1) {
-									componentsID.push(component.id);
-									componentsInComponent.push({
-										state: "closed",
-										attr: {
-											id: component.id
-										},
-										data: {
-											title: component.name,
-										},
-										metadata: {
-											type: 'component'
-										}
-									});
-								}
-							});
-						}
-					});
-
-					return componentsInComponent.concat(componentIssues);
-				} else {
-					return data.map(function(Component) {
-						return {
-							state: "closed",
-							attr: {
-								id: Component.id
-							},
-							data: {
-								title: Component.name,
-							}
-						}
-					});
-				}
-			};
-
-
-
-			var tree = $('div#tree');
-
-			tree.empty();
-			tree.append('<ul></ul>');
-			tree.jstree({
-				plugins: ['themes', 'json_data', 'grid'],
-				grid: {
-					// Поля таблицы
-					columns: [
-						{width: 650, header: 'Задачи'},
-						{width: 23, header: '', value: 'priority', source: 'metadata'},
-						{width: 23, header: '', value: 'status', source: 'metadata'}
-					],
-					resizable: true
-				},
-				json_data: {
-					ajax: {
-						type: 'GET',
-						url: get_url,
-						success: parse_data
-					},
-					"correct_state": true
-				},
-				themes: {
-					theme: 'apple',
-					url: 'http://static.jstree.com/v.1.0pre/themes/apple/style.css'
-				},
-				_disabled: true
-			});
-		};
-
-		// Ищем гадреты для замены
+		// Ищем гаджеты для замены
 		var gadget = jQuery('div.gadget-container h3.dashboard-item-title').filter(function() {
 			return (jQuery(this).text() == 'Structure');
 		});
@@ -173,6 +25,179 @@
 		iframe.each(function(ID) {
 			gadgetID.push($(this).attr('id'));
 		});
+
+		var tree = function(height) {
+Ext.require([
+    'Ext.data.*',
+    'Ext.grid.*',
+    'Ext.tree.*'
+]);
+
+Ext.onReady(function() {
+    Ext.define('Task', {
+        extend: 'Ext.data.Model',
+        fields: ['name', 'status']
+    });
+
+    var store = Ext.create('Ext.data.TreeStore', {
+        model: 'Task',
+		root: {
+			expanded: false,
+			children: []
+		},
+        folderSort: true
+    });
+
+	store.on('beforeload', function(store, op, eOpts) {
+		var node = op.node;
+		var componentIDs = [];
+
+		while (!node.isRoot()) {
+			componentIDs.push(node.raw.componentID);
+			node = node.parentNode;
+		}
+
+		Ext.Ajax.request({
+			url: '/rest/api/latest/search?jql=project=MAILSERVER+and+component='
+				+ componentIDs.join('+and+component='),
+			success: function(response) {
+				add_child(op.node, componentIDs, response);
+			}
+		});
+
+		return false;
+	});
+
+    var tree = Ext.create('Ext.tree.Panel', {
+		id: "Tree",
+        title: 'Core Team Projects',
+        renderTo: Ext.getBody(),
+        collapsible: true,
+        useArrows: true,
+        rootVisible: false,
+        store: store,
+        multiSelect: true,
+        singleExpand: false,
+		height: height,
+        //the 'columns' property is now 'headers'
+        columns: [{
+            xtype: 'treecolumn', //this is so we know which column will show the tree
+            text: 'Задачи',
+            flex: 2,
+            sortable: true,
+            dataIndex: 'name'
+        },{
+			xtype: 'templatecolumn',
+            text: 'Состояние',
+            flex: 1,
+            dataIndex: 'status',
+            sortable: true,
+			tpl: Ext.create('Ext.XTemplate', '<img src={status}></img>')
+        }]
+    });
+
+	var add_child = function(node, level, response) {
+		var data = Ext.decode(response.responseText);
+		var existsID = level.slice();
+
+		node.childNodes.forEach(function(child) {
+			if (child.raw.componentID) {
+				existsID.push(child.raw.componentID);
+			}
+		});
+
+		data.issues.forEach(function(issue) {
+			if (issue.fields.components.length == level.length + 1) {
+				// компонента на следующем уровне
+				var component = issue.fields.components.filter(function(component) {
+					return existsID.indexOf(component.id) < 0;
+				})[0];
+				if (component) {
+					// И её ещё нету в списке
+					existsID.push(component.id);
+
+					// Добавляем новую компоненту и ставим, чтобы она
+					// загрузилась при её раскрытии
+					appendedNode = node.appendChild({
+						name: component.name,
+						componentID: component.id,
+						leaf: false
+					});
+					appendedNode.set('loaded', false);
+				}
+			} if (issue.fields.components.length == level.length) {
+				// Добавляем новую задачу на этом уровне
+				node.appendChild({
+					children: issue.fields.subtasks.map(function(subtask) {
+						return {
+							name: subtask.key + ": " + subtask.fields.summary,
+							href: 'http://jira.ngs.local/browse/' + subtask.key,
+							icon: subtask.fields.issuetype.iconUrl,
+							'status': subtask.fields['status'].iconUrl,
+							leaf: true
+						};
+					}),
+					name: issue.key + ": " + issue.fields.summary,
+					icon: issue.fields.issuetype.iconUrl,
+					href: 'http://jira.ngs.local/browse/' + issue.key,
+					leaf: issue.fields.subtasks.length == 0,
+					'status': issue.fields['status'].iconUrl
+				});
+			}
+		});
+
+		var start = data.startAt + data.maxResults;
+
+		if (data.total > start) {
+			// Есть ещё страницы
+			Ext.Ajax.request({
+				url: '/rest/api/latest/search?jql=project=MAILSERVER+' +
+					(node.isRoot() ? '' : 'and+component=') +
+					level.join('+and+component=') +
+					'&startAt=' + start.toString(),
+				success: function(response) {
+					add_child(node, level, response);
+				}
+			});
+		} else {
+			node.sort(function(nodeA, nodeB) {
+				if ((nodeA.isLeaf() && nodeB.isLeaf()) ||
+					(!nodeA.isLeaf() && !nodeB.isLeaf())) {
+					if (nodeA.raw.name > nodeB.data.name) {
+						return 1;
+					} if (nodeA.raw.name < nodeB.data.name) {
+						return -1;
+					}
+					return 0;
+				} else {
+					if (nodeA.isLeaf()) {
+						return 1;
+					} else {
+						return -1;
+					}
+				}
+			});
+
+			if (node.isRoot()) {
+				tree.setLoading(false);
+			} else {
+				node.set('loading', false);
+				node.expand();
+			}
+		}
+	};
+
+	tree.setLoading("Построение дерева проекта");
+
+	Ext.Ajax.request({
+		url: '/rest/api/latest/search?jql=project=MAILSERVER',
+		success: function(response) {
+			add_child(tree.getRootNode(), [], response);
+		}
+	});
+});
+
+		};
 
 		// Заменяем гаджет на свой
 		gadgetID.forEach(function(ID) {
@@ -185,15 +210,13 @@
 			window.frames[ID].document.write(
 				"<html style='height: " + iframe.attr('height') + "px; overflow: auto;'>" +
 					"<head>" +
-						'<script src="//ajax.googleapis.com/ajax/libs/jquery/1.8.3/jquery.min.js"></script>' +
-						'<script src="https://raw.github.com/nevar/jstree/v.pre1.0/jquery.jstree.js"></script>' +
-						'<script src="https://raw.github.com/deitch/jstree-grid/master/jstreegrid.js"></script>' +
+						'<link rel="stylesheet" type="text/css" href="http://dev.sencha.com/deploy/ext-4.1.0-gpl/resources/css/ext-all.css"/>' +
+						'<script src="http://cdn.sencha.io/ext-4.1.1-gpl/ext-all-debug.js"></script>' +
 						'<script>' +
-							"$(" + tree.toString() + ")" +
+							"(" + tree.toString() + ")(" + iframe.attr('height') + ");" +
 						'</script>' +
 					"</head>" +
 					"<body style='height: " + iframe.attr('height') + "px; overflow: auto; margin: 0px;'>" +
-						"<div id='tree'></div>" + // Сюда будет вставлено дерево проекта
 					"</body>" +
 				"</html>");
 			window.frames[ID].document.close();
