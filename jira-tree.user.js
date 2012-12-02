@@ -278,20 +278,24 @@ Ext.onReady(function() {
 		gadgetID.forEach(function(ID) {
 			var iframe = jQuery('#' + ID);
 			iframe.attr('src', '//about:blank');
-			iframe.removeAttr('scrolling');
-			iframe.addClass('tree-frame');
+
+			// Обновление размеров гаджета в дашборе JIR-ы
+			var height = 500;
+			var element = document.getElementById(ID);
+			element.style.height = height + 'px';
+			jQuery(AG).trigger("AG.iframeResize", [element, height]);
 
 			window.frames[ID].document.open('text/html', 'replace');
 			window.frames[ID].document.write(
-				"<html style='height: " + iframe.attr('height') + "px; overflow: auto;'>" +
+				"<html style='height: " + height + "px; overflow: auto;'>" +
 					"<head>" +
 						'<link rel="stylesheet" type="text/css" href="http://dev.sencha.com/deploy/ext-4.1.0-gpl/resources/css/ext-all.css"/>' +
 						'<script src="http://cdn.sencha.io/ext-4.1.1-gpl/ext-all-debug.js"></script>' +
 						'<script>' +
-							"(" + tree.toString() + ")(" + iframe.attr('height') + ");" +
+							"(" + tree.toString() + ")(" + height + ");" +
 						'</script>' +
 					"</head>" +
-					"<body style='height: " + iframe.attr('height') + "px; overflow: auto; margin: 0px;'>" +
+					"<body style='height: " + height + "px; overflow: auto; margin: 0px;'>" +
 					"</body>" +
 				"</html>");
 			window.frames[ID].document.close();
