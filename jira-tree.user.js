@@ -30,12 +30,14 @@
 Ext.require([
     'Ext.data.*',
     'Ext.grid.*',
-    'Ext.tree.*'
+    'Ext.tree.*',
+    'Ext.state.*'
 ]);
 
 Ext.onReady(function() {
-	var project_list = [],
-		current_project;
+	var current_project;
+
+	Ext.state.Manager.setProvider(new Ext.state.CookieProvider());
 
     Ext.define('Task', {
         extend: 'Ext.data.Model',
@@ -61,7 +63,7 @@ Ext.onReady(function() {
 		}
 
 		Ext.Ajax.request({
-			url: '/rest/api/latest/search?jql=project=MAILSERVER+and+component='
+			url: '/rest/api/latest/search?jql=project=' + current_project.key + '+and+component='
 				+ componentIDs.join('+and+component='),
 			success: function(response) {
 				add_child(op.node, componentIDs, response);
@@ -71,9 +73,10 @@ Ext.onReady(function() {
 		return false;
 	});
 
+
     var tree = Ext.create('Ext.tree.Panel', {
 		id: "Tree",
-        title: 'Core Team Projects',
+        title: 'Дерево проекта',
         renderTo: Ext.getBody(),
         collapsible: true,
         useArrows: true,
@@ -97,7 +100,10 @@ Ext.onReady(function() {
             dataIndex: 'status',
             sortable: true,
 			tpl: Ext.create('Ext.XTemplate', '<img src={status}></img>')
-        }]
+        }],
+		dockedItems: [],
+		stateful: true,
+		stateId: 'ProjectTree'
     });
 
 	var add_child = function(node, level, response) {
@@ -155,8 +161,8 @@ Ext.onReady(function() {
 		if (data.total > start) {
 			// Есть ещё страницы
 			Ext.Ajax.request({
-				url: '/rest/api/latest/search?jql=project=MAILSERVER+' +
-					(node.isRoot() ? '' : 'and+component=') +
+				url: '/rest/api/latest/search?jql=project=' + current_project.key +
+					(node.isRoot() ? '' : '+and+component=') +
 					level.join('+and+component=') +
 					'&startAt=' + start.toString(),
 				success: function(response) {
@@ -188,12 +194,80 @@ Ext.onReady(function() {
 		}
 	};
 
-	tree.setLoading("Построение дерева проекта");
+	var select_project = function(project) {
+		// Начинаем загрузку проекта
+		tree.setLoading("Построение дерева проекта");
+		tree.setRootNode({name: project.key, children: []});
+
+		Ext.Ajax.request({
+			url: '/rest/api/latest/search?jql=project=' + project.key,
+			success: function(response) {
+				add_child(tree.getRootNode(), [], response);
+			}
+		});
+	};
+
+	var project_selector = Ext.create('Ext.menu.Menu', {
+		stateful: false
+	});
+
+	tree.addDocked({
+		xtype: 'toolbar',
+		id: 'TreeToolBar',
+		items: [{
+			text: 'Выберете проект',
+			id: 'SelectedProject',
+
+			stateful: true,
+			stateEvents: ['click'],
+			stateId: 'SelectedProject',
+
+			getState: function() {
+				// Сохраняем выбранный проект
+				return current_project;
+			},
+
+			listeners: {
+				// Загружаем выбраный проект
+				staterestore: function(stateful, state, eOpts) {
+					if (state.key && state.name) {
+						current_project = state
+						select_project(state);
+
+						this.setIconCls(state.key);
+						this.setText(state.name);
+					}
+				}
+			},
+
+			menu: project_selector
+		}]
+	});
 
 	Ext.Ajax.request({
-		url: '/rest/api/latest/search?jql=project=MAILSERVER',
+		url: '/rest/api/latest/project',
 		success: function(response) {
-			add_child(tree.getRootNode(), [], response);
+			var projects = Ext.decode(response.responseText);
+
+			projects.forEach(function(project) {
+				Ext.util.CSS.createStyleSheet('.' + project.key + '{background-image: url("' + project.avatarUrls['16x16'] + '")}');
+				project_selector.add({
+					text: project.name,
+					iconCls: project.key,
+					handler: function(item) {
+						var info = {
+							key: project.key,
+							name: project.name
+						};
+						current_project = info;
+						select_project(info);
+
+						var selectButton = this.parentMenu.ownerButton;
+						selectButton.setIconCls(info.key);
+						selectButton.setText(info.name);
+					}
+				});
+			});
 		}
 	});
 });
