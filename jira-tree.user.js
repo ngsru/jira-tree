@@ -34,9 +34,11 @@ Ext.require([
     'Ext.state.*'
 ]);
 
+Ext.BLANK_IMAGE_URL = '/images/border/spacer.gif';
+
 Ext.onReady(function() {
 	var current_project;
-	var filter = '&fields=summary,issuetype,priority,subtasks,components,status';
+	var filter = '&fields=summary,issuetype,priority,subtasks,components,status&maxResults=250';
 
 	Ext.state.Manager.setProvider(new Ext.state.CookieProvider());
 
