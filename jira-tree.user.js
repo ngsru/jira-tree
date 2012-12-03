@@ -36,6 +36,7 @@ Ext.require([
 
 Ext.onReady(function() {
 	var current_project;
+	var filter = '&fields=summary,issuetype,priority,subtasks,components,status';
 
 	Ext.state.Manager.setProvider(new Ext.state.CookieProvider());
 
@@ -64,7 +65,7 @@ Ext.onReady(function() {
 
 		Ext.Ajax.request({
 			url: '/rest/api/latest/search?jql=project=' + current_project.key + '+and+component='
-				+ componentIDs.join('+and+component='),
+				+ componentIDs.join('+and+component=') + filter,
 			success: function(response) {
 				add_child(op.node, componentIDs, response);
 			}
@@ -109,14 +110,17 @@ Ext.onReady(function() {
 	var add_child = function(node, level, response) {
 		var data = Ext.decode(response.responseText);
 		var existsID = level.slice();
+		var issue;
 
-		node.childNodes.forEach(function(child) {
-			if (child.raw.componentID) {
-				existsID.push(child.raw.componentID);
+		for(var i = 0, l = node.childNodes.length; i < l; i++) {
+			if (node.childNodes[i].raw.componentID) {
+				existsID.push(node.childNodes[i].raw.componentID);
 			}
-		});
+		}
 
-		data.issues.forEach(function(issue) {
+		for(var i = 0, l = data.issues.length; i < l; i++) {
+			issue = data.issues[i];
+
 			if (issue.fields.components.length == level.length + 1) {
 				// компонента на следующем уровне
 				var component = issue.fields.components.filter(function(component) {
@@ -154,7 +158,7 @@ Ext.onReady(function() {
 					'status': issue.fields['status'].iconUrl
 				});
 			}
-		});
+		}
 
 		var start = data.startAt + data.maxResults;
 
@@ -164,7 +168,7 @@ Ext.onReady(function() {
 				url: '/rest/api/latest/search?jql=project=' + current_project.key +
 					(node.isRoot() ? '' : '+and+component=') +
 					level.join('+and+component=') +
-					'&startAt=' + start.toString(),
+					'&startAt=' + start.toString() + filter,
 				success: function(response) {
 					add_child(node, level, response);
 				}
@@ -198,9 +202,10 @@ Ext.onReady(function() {
 		// Начинаем загрузку проекта
 		tree.setLoading("Построение дерева проекта");
 		tree.setRootNode({name: project.key, children: []});
+		tree.getRootNode().collapse();
 
 		Ext.Ajax.request({
-			url: '/rest/api/latest/search?jql=project=' + project.key,
+			url: '/rest/api/latest/search?jql=project=' + project.key + filter,
 			success: function(response) {
 				add_child(tree.getRootNode(), [], response);
 			}
@@ -247,17 +252,20 @@ Ext.onReady(function() {
 	Ext.Ajax.request({
 		url: '/rest/api/latest/project',
 		success: function(response) {
-			var projects = Ext.decode(response.responseText);
+			var projects = Ext.decode(response.responseText),
+				project;
 
-			projects.forEach(function(project) {
+			for(var i = 0, l = projects.length; i < l; i++) {
+				project = projects[i];
+
 				Ext.util.CSS.createStyleSheet('.' + project.key + '{background-image: url("' + project.avatarUrls['16x16'] + '")}');
 				project_selector.add({
 					text: project.name,
 					iconCls: project.key,
 					handler: function(item) {
 						var info = {
-							key: project.key,
-							name: project.name
+							key: item.renderData.iconCls,
+							name: item.renderData.text
 						};
 						current_project = info;
 						select_project(info);
@@ -267,39 +275,42 @@ Ext.onReady(function() {
 						selectButton.setText(info.name);
 					}
 				});
-			});
+			}
 		}
 	});
 });
 
 		};
 
+		var height = 500;
+		var script =
+			"<html style='height: " + height + "px; overflow: auto;'>" +
+				"<head>" +
+					'<link rel="stylesheet" type="text/css" href="http://dev.sencha.com/deploy/ext-4.1.0-gpl/resources/css/ext-all.css"/>' +
+					'<script src="http://cdn.sencha.io/ext-4.1.1-gpl/ext-all.js"></script>' +
+					'<script>' +
+						"(" + tree.toString() + ")(" + height + ");" +
+					'</script>' +
+				"</head>" +
+				"<body style='height: " + height + "px; overflow: auto; margin: 0px;'>" +
+				"</body>" +
+			"</html>";
+		var ID, element;
+
 		// Заменяем гаджет на свой
-		gadgetID.forEach(function(ID) {
-			var iframe = jQuery('#' + ID);
-			iframe.attr('src', '//about:blank');
+		for(var i = 0, l = gadgetID.length; i < l; i++) {
+			ID = gadgetID[i];
 
 			// Обновление размеров гаджета в дашборе JIR-ы
-			var height = 500;
 			var element = document.getElementById(ID);
 			element.style.height = height + 'px';
+			element.src = '//about:blank';
 			jQuery(AG).trigger("AG.iframeResize", [element, height]);
 
 			window.frames[ID].document.open('text/html', 'replace');
-			window.frames[ID].document.write(
-				"<html style='height: " + height + "px; overflow: auto;'>" +
-					"<head>" +
-						'<link rel="stylesheet" type="text/css" href="http://dev.sencha.com/deploy/ext-4.1.0-gpl/resources/css/ext-all.css"/>' +
-						'<script src="http://cdn.sencha.io/ext-4.1.1-gpl/ext-all-debug.js"></script>' +
-						'<script>' +
-							"(" + tree.toString() + ")(" + height + ");" +
-						'</script>' +
-					"</head>" +
-					"<body style='height: " + height + "px; overflow: auto; margin: 0px;'>" +
-					"</body>" +
-				"</html>");
+			window.frames[ID].document.write(script);
 			window.frames[ID].document.close();
-		});
+		}
 	};
 
 	var script = document.createElement("script");
