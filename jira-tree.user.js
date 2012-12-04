@@ -146,14 +146,14 @@ Ext.onReady(function() {
 				node.appendChild({
 					children: issue.fields.subtasks.map(function(subtask) {
 						return {
-							name: subtask.key + ": " + subtask.fields.summary,
+							name: Ext.util.Format.htmlEncode(subtask.key + ": " + subtask.fields.summary),
 							href: 'http://jira.ngs.local/browse/' + subtask.key,
 							icon: subtask.fields.issuetype.iconUrl,
 							'status': subtask.fields['status'].iconUrl,
 							leaf: true
 						};
 					}),
-					name: issue.key + ": " + issue.fields.summary,
+					name: Ext.util.Format.htmlEncode(issue.key + ": " + issue.fields.summary),
 					icon: issue.fields.issuetype.iconUrl,
 					href: 'http://jira.ngs.local/browse/' + issue.key,
 					leaf: issue.fields.subtasks.length == 0,
@@ -267,7 +267,7 @@ Ext.onReady(function() {
 					handler: function(item) {
 						var info = {
 							key: item.renderData.iconCls,
-							name: item.renderData.text
+							name: Ext.util.Format.htmlEncode(item.renderData.text)
 						};
 						current_project = info;
 						select_project(info);
