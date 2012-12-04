@@ -38,7 +38,9 @@ Ext.BLANK_IMAGE_URL = '/images/border/spacer.gif';
 
 Ext.onReady(function() {
 	var current_project;
-	var filter = '&fields=summary,issuetype,priority,subtasks,components,status&maxResults=250';
+	var maxResults = 500;
+	var fields = ['summary', 'issuetype', 'priority', 'subtasks', 'components',
+		'status'];
 
 	Ext.state.Manager.setProvider(new Ext.state.CookieProvider());
 
@@ -56,6 +58,44 @@ Ext.onReady(function() {
         folderSort: true
     });
 
+	var all_components = [];
+
+	var components_search = function(exists) {
+		if (all_components.length == 0 ) {
+			return 'component is EMPTY';
+		}
+
+		var jql = '';
+		if (exists.length > 0) {
+			jql += 'component=' + exists.join(' and component=') + ' and';
+		}
+
+		var MayBeSubComponent = all_components.filter(function(component) {
+			return exists.indexOf(component) < 0;
+		});
+
+		jql += '(';
+		for(var i = 0, l = MayBeSubComponent.length; i < l; i++) {
+			jql += '(component=' + MayBeSubComponent[i];
+
+			for(var j = 0; j < l; j++) {
+				if (j != i) {
+					jql += ' and component!=' + MayBeSubComponent[j];
+				}
+			}
+			jql += ')';
+			if (i != l - 1) {
+				jql += 'or';
+			}
+		}
+		if (exists.length > 0) {
+			jql += 'or(component!=' + MayBeSubComponent.join(' and component!=') + ')';
+		}
+		jql += ')';
+
+		return jql;
+	};
+
 	store.on('beforeload', function(store, op, eOpts) {
 		var node = op.node;
 		var componentIDs = [];
@@ -66,8 +106,14 @@ Ext.onReady(function() {
 		}
 
 		Ext.Ajax.request({
-			url: '/rest/api/latest/search?jql=project=' + current_project.key + '+and+component='
-				+ componentIDs.join('+and+component=') + filter,
+			url: '/rest/api/latest/search',
+			jsonData: {
+				jql: 'project=' + current_project.key + ' and ' +
+					components_search(componentIDs),
+				fields: fields,
+				startAt: 0,
+				maxResults: maxResults
+			},
 			success: function(response) {
 				add_child(op.node, componentIDs, response);
 			}
@@ -167,10 +213,14 @@ Ext.onReady(function() {
 		if (data.total > start) {
 			// Есть ещё страницы
 			Ext.Ajax.request({
-				url: '/rest/api/latest/search?jql=project=' + current_project.key +
-					(node.isRoot() ? '' : '+and+component=') +
-					level.join('+and+component=') +
-					'&startAt=' + start.toString() + filter,
+				url: '/rest/api/latest/search',
+				jsonData: {
+					jql: 'project=' + current_project.key + ' and ' +
+						components_search(level),
+					fields: fields,
+					startAt: start,
+					maxResults: maxResults
+				},
 				success: function(response) {
 					add_child(node, level, response);
 				}
@@ -207,9 +257,27 @@ Ext.onReady(function() {
 		tree.getRootNode().collapse();
 
 		Ext.Ajax.request({
-			url: '/rest/api/latest/search?jql=project=' + project.key + filter,
+			url: '/rest/api/2/project/' + project.key + '/components',
 			success: function(response) {
-				add_child(tree.getRootNode(), [], response);
+				var data = Ext.decode(response.responseText);
+
+				all_components = data.map(function(component) {
+					return component.id;
+				});
+
+				Ext.Ajax.request({
+					url: '/rest/api/latest/search',
+					jsonData: {
+						jql: 'project=' + project.key + ' and ' +
+							components_search([]),
+						fields: fields,
+						startAt: 0,
+						maxResults: maxResults
+					},
+					success: function(response) {
+						add_child(tree.getRootNode(), [], response);
+					}
+				});
 			}
 		});
 	};
