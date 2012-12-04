@@ -96,6 +96,104 @@ Ext.onReady(function() {
 		return jql;
 	};
 
+	var add_child = function(node, level, data) {
+		var existsID = level.slice();
+		var issue;
+
+		for(var i = 0, l = node.childNodes.length; i < l; i++) {
+			if (node.childNodes[i].raw.componentID) {
+				existsID.push(node.childNodes[i].raw.componentID);
+			}
+		}
+
+		for(var i = 0, l = data.issues.length; i < l; i++) {
+			issue = data.issues[i];
+
+			if (issue.fields.components.length == level.length + 1) {
+				// компонента на следующем уровне
+				var component = issue.fields.components.filter(function(component) {
+					return existsID.indexOf(component.id) < 0;
+				})[0];
+				if (component) {
+					// И её ещё нету в списке
+					existsID.push(component.id);
+
+					// Добавляем новую компоненту и ставим, чтобы она
+					// загрузилась при её раскрытии
+					appendedNode = node.appendChild({
+						name: component.name,
+						componentID: component.id,
+						leaf: false
+					});
+					appendedNode.set('loaded', false);
+				}
+			} else {
+				// Добавляем новую задачу на этом уровне
+				node.appendChild({
+					children: issue.fields.subtasks.map(function(subtask) {
+						return {
+							name: Ext.util.Format.htmlEncode(subtask.key + ": " + subtask.fields.summary),
+							href: 'http://jira.ngs.local/browse/' + subtask.key,
+							icon: subtask.fields.issuetype.iconUrl,
+							'status': subtask.fields['status'].iconUrl,
+							leaf: true
+						};
+					}),
+					name: Ext.util.Format.htmlEncode(issue.key + ": " + issue.fields.summary),
+					icon: issue.fields.issuetype.iconUrl,
+					href: 'http://jira.ngs.local/browse/' + issue.key,
+					leaf: issue.fields.subtasks.length == 0,
+					'status': issue.fields['status'].iconUrl
+				});
+			}
+		}
+	};
+
+	var continue_ajax = function(node, level, startAt, maxResults, total) {
+		var start = startAt + maxResults;
+		if (total > start) {
+			// Есть ещё страницы
+			Ext.Ajax.request({
+				url: '/rest/api/latest/search',
+				jsonData: {
+					jql: 'project=' + current_project.key + ' and ' +
+						components_search(level),
+					fields: fields,
+					startAt: start,
+					maxResults: maxResults
+				},
+				success: function(response) {
+					var data = Ext.decode(response.responseText);
+
+					add_child(node, level, data);
+					continue_ajax(node, level, data.startAt, data.maxResults, data.total);
+				}
+			});
+		} else {
+			node.set('loading', false);
+			node.expand();
+			node.sort(function(nodeA, nodeB) {
+				if ((nodeA.raw.componentID && nodeB.raw.componentID) ||
+					(!nodeA.raw.componentID && !nodeB.raw.componentID)){
+					if (nodeA.data.name > nodeB.data.name) {
+						return 1;
+					} if (nodeA.data.name < nodeB.data.name) {
+						return -1;
+					}
+					return 0;
+				} else if (nodeA.raw.componentID) {
+					return -1;
+				} else {
+					return 1;
+				}
+			});
+
+			if (node.isRoot()) {
+				tree.setLoading(false);
+			}
+		}
+	};
+
 	store.on('beforeload', function(store, op, eOpts) {
 		var node = op.node;
 		var componentIDs = [];
@@ -115,13 +213,15 @@ Ext.onReady(function() {
 				maxResults: maxResults
 			},
 			success: function(response) {
-				add_child(op.node, componentIDs, response);
+				var data = Ext.decode(response.responseText);
+
+				add_child(op.node, componentIDs, data);
+				continue_ajax(op.node, componentIDs, data.startAt, data.maxResults, data.total);
 			}
 		});
 
 		return false;
 	});
-
 
     var tree = Ext.create('Ext.tree.Panel', {
 		id: "Tree",
@@ -155,101 +255,6 @@ Ext.onReady(function() {
 		stateId: 'ProjectTree'
     });
 
-	var add_child = function(node, level, response) {
-		var data = Ext.decode(response.responseText);
-		var existsID = level.slice();
-		var issue;
-
-		for(var i = 0, l = node.childNodes.length; i < l; i++) {
-			if (node.childNodes[i].raw.componentID) {
-				existsID.push(node.childNodes[i].raw.componentID);
-			}
-		}
-
-		for(var i = 0, l = data.issues.length; i < l; i++) {
-			issue = data.issues[i];
-
-			if (issue.fields.components.length == level.length + 1) {
-				// компонента на следующем уровне
-				var component = issue.fields.components.filter(function(component) {
-					return existsID.indexOf(component.id) < 0;
-				})[0];
-				if (component) {
-					// И её ещё нету в списке
-					existsID.push(component.id);
-
-					// Добавляем новую компоненту и ставим, чтобы она
-					// загрузилась при её раскрытии
-					appendedNode = node.appendChild({
-						name: component.name,
-						componentID: component.id,
-						leaf: false
-					});
-					appendedNode.set('loaded', false);
-				}
-			} if (issue.fields.components.length == level.length) {
-				// Добавляем новую задачу на этом уровне
-				node.appendChild({
-					children: issue.fields.subtasks.map(function(subtask) {
-						return {
-							name: Ext.util.Format.htmlEncode(subtask.key + ": " + subtask.fields.summary),
-							href: 'http://jira.ngs.local/browse/' + subtask.key,
-							icon: subtask.fields.issuetype.iconUrl,
-							'status': subtask.fields['status'].iconUrl,
-							leaf: true
-						};
-					}),
-					name: Ext.util.Format.htmlEncode(issue.key + ": " + issue.fields.summary),
-					icon: issue.fields.issuetype.iconUrl,
-					href: 'http://jira.ngs.local/browse/' + issue.key,
-					leaf: issue.fields.subtasks.length == 0,
-					'status': issue.fields['status'].iconUrl
-				});
-			}
-		}
-
-		var start = data.startAt + data.maxResults;
-
-		if (data.total > start) {
-			// Есть ещё страницы
-			Ext.Ajax.request({
-				url: '/rest/api/latest/search',
-				jsonData: {
-					jql: 'project=' + current_project.key + ' and ' +
-						components_search(level),
-					fields: fields,
-					startAt: start,
-					maxResults: maxResults
-				},
-				success: function(response) {
-					add_child(node, level, response);
-				}
-			});
-		} else {
-			node.set('loading', false);
-			node.expand();
-			node.sort(function(nodeA, nodeB) {
-				if ((nodeA.raw.componentID && nodeB.raw.componentID) ||
-					(!nodeA.raw.componentID && !nodeB.raw.componentID)){
-					if (nodeA.data.name > nodeB.data.name) {
-						return 1;
-					} if (nodeA.data.name < nodeB.data.name) {
-						return -1;
-					}
-					return 0;
-				} else if (nodeA.raw.componentID) {
-					return -1;
-				} else {
-					return 1;
-				}
-			});
-
-			if (node.isRoot()) {
-				tree.setLoading(false);
-			}
-		}
-	};
-
 	var select_project = function(project) {
 		// Начинаем загрузку проекта
 		tree.setLoading("Построение дерева проекта");
@@ -265,19 +270,64 @@ Ext.onReady(function() {
 					return component.id;
 				});
 
-				Ext.Ajax.request({
-					url: '/rest/api/latest/search',
-					jsonData: {
-						jql: 'project=' + project.key + ' and ' +
-							components_search([]),
-						fields: fields,
-						startAt: 0,
-						maxResults: maxResults
-					},
-					success: function(response) {
-						add_child(tree.getRootNode(), [], response);
+				if (all_components.length > 0) {
+					var jql;
+					var complited = 0;
+
+					for(var i = 0, l = all_components.length; i < l; i++) {
+						jql = ' and component=' + all_components[i];
+
+						for(var j = 0; j < l; j++) {
+							if (j != i) {
+								jql += ' and component!=' + all_components[j];
+							}
+						}
+
+						Ext.Ajax.request({
+							url: '/rest/api/latest/search',
+							jsonData: {
+								jql: 'project=' + project.key + jql,
+								fields: fields,
+								startAt: 0,
+								maxResults: 1
+							},
+							success: function(response) {
+								var data = Ext.decode(response.responseText);
+
+								complited += 1;
+
+								add_child(tree.getRootNode(), [], data);
+							}
+						});
 					}
-				});
+
+					var task = new Ext.util.DelayedTask(function(){
+						if (complited == all_components.length) {
+							continue_ajax(tree.getRootNode(), [], 0, 1, 0);
+						} else {
+							task.delay(500);
+						}
+					});
+
+					task.delay(1000);
+				} else {
+					Ext.Ajax.request({
+						url: '/rest/api/latest/search',
+						jsonData: {
+							jql: 'project=' + project.key + ' and ' +
+								components_search([]),
+							fields: fields,
+							startAt: 0,
+							maxResults: maxResults
+						},
+						success: function(response) {
+							var data = Ext.decode(response.responseText);
+
+							add_child(node, level, data);
+							continue_ajax(tree.getRootNode(), level, data.startAt, data.maxResults, data.total);
+						}
+					});
+				}
 			}
 		});
 	};
