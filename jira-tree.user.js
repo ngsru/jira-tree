@@ -322,10 +322,11 @@ Ext.onReady(function() {
 							maxResults: maxResults
 						},
 						success: function(response) {
-							var data = Ext.decode(response.responseText);
+							var data = Ext.decode(response.responseText),
+								node = tree.getRootNode();
 
-							add_child(node, level, data);
-							continue_ajax(tree.getRootNode(), level, data.startAt, data.maxResults, data.total);
+							add_child(node, [], data);
+							continue_ajax(node, [], data.startAt, data.maxResults, data.total);
 						}
 					});
 				}
