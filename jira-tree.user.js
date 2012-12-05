@@ -123,6 +123,7 @@ Ext.onReady(function() {
 					appendedNode = node.appendChild({
 						name: component.name,
 						componentID: component.id,
+						iconCls: 'jira-tree-component',
 						leaf: false
 					});
 					appendedNode.set('loaded', false);
@@ -401,6 +402,9 @@ Ext.onReady(function() {
 
 	// Фикс скорости прокрутки элементов в списке проектов
 	project_selector.layout.overflowHandler.wheelIncrement = 75;
+
+	Ext.util.CSS.createStyleSheet('.x-grid-tree-node-expanded .jira-tree-component{background-image: url("/images/icons/component.gif")}');
+	Ext.util.CSS.createStyleSheet('.jira-tree-component{background-image: url("/images/icons/component.gif")}');
 });
 
 		};
