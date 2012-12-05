@@ -398,6 +398,9 @@ Ext.onReady(function() {
 			}
 		}
 	});
+
+	// Фикс скорости прокрутки элементов в списке проектов
+	project_selector.layout.overflowHandler.wheelIncrement = 75;
 });
 
 		};
