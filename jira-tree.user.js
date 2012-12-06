@@ -1,5 +1,5 @@
 // JIRA5 Tree Viwer
-// Version 0.3.5 (for JIRA 5.1)
+// Version 0.3.6 (for JIRA 5.1)
 // 11-09-2012
 // Autor: Slava Yurin <YurinVV@ya.ru>
 
@@ -9,7 +9,7 @@
 // @description   Show you project as tree
 // @match		  http://jira.ngs.local/*
 // @match		  http://jira/*
-// @version		  0.3.5
+// @version		  0.3.6
 // @include		  http://jira.ngs.local/*
 // @include		  http://jira/*
 // ==/UserScript==
@@ -135,6 +135,7 @@ Ext.onReady(function() {
 						return {
 							name: Ext.util.Format.htmlEncode(subtask.key + ": " + subtask.fields.summary),
 							href: 'http://jira.ngs.local/browse/' + subtask.key,
+							hrefTarget: '_blank',
 							icon: subtask.fields.issuetype.iconUrl,
 							'status': subtask.fields['status'].iconUrl,
 							leaf: true
@@ -143,6 +144,7 @@ Ext.onReady(function() {
 					name: Ext.util.Format.htmlEncode(issue.key + ": " + issue.fields.summary),
 					icon: issue.fields.issuetype.iconUrl,
 					href: 'http://jira.ngs.local/browse/' + issue.key,
+					hrefTarget: '_blank',
 					leaf: issue.fields.subtasks.length == 0,
 					'status': issue.fields['status'].iconUrl
 				});
